@@ -1,3 +1,9 @@
+"""
+reddit_videos
+
+see README for important information
+"""
+
 import os
 import requests
 from securedata import securedata
@@ -42,8 +48,12 @@ for post in res.json()['data']['children']:
 
 # remove old video
 os.system("rm output.mp4")
+
 # create video
-os.system("ffmpeg -f image2 -r 1/5 -i ./output/%01d.jpg -vcodec mpeg4 -y ./output/video_noaudio.mp4")
+os.system(
+    "ffmpeg -f image2 -r 1/5 -i ./output/%01d.jpg -vcodec mpeg4 -y ./output/noaudio.mp4")
 
 # add audio
-os.system("ffmpeg -i ./output/video_noaudio.mp4 -i ./assets/beautiful_life.mp3 -map 0:v -map 1:a -c:v copy -shortest output.mp4")
+os.system("""ffmpeg -i ./output/noaudio.mp4 -i |
+          ./assets/beautiful_life.mp3 |
+          -map 0:v -map 1:a -c:v copy -shortest output.mp4""")
