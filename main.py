@@ -5,12 +5,96 @@ see README for important information
 """
 
 import os
+import math
+import textwrap
 import requests
 from securedata import securedata
+from PIL import Image, ImageDraw, ImageFont
+
+IMG_SIZE = (1920, 1080)
+IMG_MSG = "This is sample text"
+IMG_FONT = ImageFont.truetype('arial.ttf', 60)
+
+
+def create_text_image(size, bg_color, message, font, font_color):
+    """
+    create a title slide between images
+    """
+    text_image = Image.new('RGB', size, bg_color)
+    draw = ImageDraw.Draw(text_image)
+
+    # append newlines after every 7 words
+    # new_sentence_array = []
+    # for count, word in enumerate(message.split(" ")):
+    #     new_sentence_array.append(word)
+    #     if count % 7 == 0:
+    #         new_sentence_array.append("\n")
+    # new_sentence = ' '.join(new_sentence_array).replace("\n ", "\n")
+
+    margin = 400
+    offset = 500
+    for line in textwrap.wrap(message, width=40, break_long_words=False):
+        draw.text((margin, offset), line, font=font, fill=font_color)
+        offset += font.getsize(line)[1]
+
+    # draw.multiline_text(((W-w)/2, (H-h)/2), message,
+    #                     font=font, fill=font_color, align="center")
+    return text_image
+
+
+def get_scaled_image_size(width, height):
+    """
+    Resize image to fit in 1920x1080 canvas
+    """
+
+    new_width = 0
+    new_height = 0
+
+    if min(width, height) == width:
+        new_height = 1080
+        new_width = (1080/height)*width
+    else:
+        new_width = 1920
+        new_height = (1920/width)*height
+
+    return (round(new_width), round(new_height))
+
+
+def resize_canvas(old_image_path="314.jpg", new_image_path="save.jpg",
+                  canvas_width=500, canvas_height=500):
+    """
+    Place one image on another image.
+
+    Resize the canvas of old_image_path and store the new image in
+    new_image_path. Center the image on the new canvas.
+    """
+    old_image = Image.open(old_image_path)
+    old_width, old_height = old_image.size
+
+    # resize image
+    old_image = old_image.resize(
+        get_scaled_image_size(old_width, old_height), Image.ANTIALIAS)
+    old_width, old_height = old_image.size
+
+    # center the image
+    coord_x1 = int(math.floor((canvas_width - old_width) / 2))
+    coord_y1 = int(math.floor((canvas_height - old_height) / 2))
+
+    mode = old_image.mode
+    if len(mode) == 1:  # L, 1
+        new_background = (255)
+    if len(mode) == 3:  # RGB
+        new_background = (255, 255, 255)
+    if len(mode) == 4:  # RGBA, CMYK
+        new_background = (255, 255, 255, 255)
+
+    new_image = Image.new(mode, (canvas_width, canvas_height), new_background)
+    new_image.paste(old_image, (coord_x1, coord_y1,
+                    coord_x1 + old_width, coord_y1 + old_height))
+    new_image.save(new_image_path)
+
 
 REDDIT = securedata.getItem("reddit")
-
-print(REDDIT['username'])
 
 auth = requests.auth.HTTPBasicAuth(
     REDDIT['personal_script'], REDDIT['secret'])
@@ -32,19 +116,44 @@ headers = {**headers, **{'Authorization': f"bearer {TOKEN}"}}
 res = requests.get("https://oauth.reddit.com/r/oldschoolcool/hot",
                    headers=headers, timeout=30)
 
-DOWNLOADED_COUNT = 0
+IMG_COUNT = 0
+
+# create title image for beginning of video
+image = create_text_image((1920, 1080), 'yellow',
+                          "Old School Cool!", IMG_FONT, 'black')
+image.save("./output/0.jpg", "JPEG")
+
+# create title image for end of video
+image = create_text_image((1920, 1080), 'yellow',
+                          "Thanks for watching. Please like and subscribe!", IMG_FONT, 'black')
+image.save("./output/11.jpg", "JPEG")
+
 for post in res.json()['data']['children']:
-    if DOWNLOADED_COUNT > 4:
+    if IMG_COUNT > 8:
         break
 
     if str(post['data']['url']).endswith('jpg'):
-        DOWNLOADED_COUNT += 1
-        print("Downloading")
+        IMG_COUNT += 1
+
+        # create title card image
+        msg_text = post['data']['title']
+
+        image = create_text_image((1920, 1080), 'black',
+                                  post['data']['title'] or 'Check this out:', IMG_FONT, 'yellow')
+        image.save(f"./output/{IMG_COUNT}.jpg", "JPEG")
+        IMG_COUNT += 1
+
+        # save Reddit image
+        print(f"Downloading {IMG_COUNT}")
         print(post['data']['url'])
 
         img = requests.get(post['data']['url'], timeout=30).content
-        with open(f"./output/{DOWNLOADED_COUNT}.jpg", 'wb') as handler:
+
+        with open(f"./output/{IMG_COUNT}.jpg", 'wb') as handler:
             handler.write(img)
+
+        resize_canvas(f"./output/{IMG_COUNT}.jpg",
+                      f"./output/{IMG_COUNT}.jpg", 1920, 1080)
 
 # remove old video
 os.system("rm output.mp4")
@@ -54,6 +163,4 @@ os.system(
     "ffmpeg -f image2 -r 1/5 -i ./output/%01d.jpg -vcodec mpeg4 -y ./output/noaudio.mp4")
 
 # add audio
-os.system("""ffmpeg -i ./output/noaudio.mp4 -i |
-          ./assets/beautiful_life.mp3 |
-          -map 0:v -map 1:a -c:v copy -shortest output.mp4""")
+os.system("""ffmpeg -i ./output/noaudio.mp4 -i ./assets/beautiful_life.mp3 -map 0:v -map 1:a -c:v copy -shortest output.mp4""")
