@@ -14,6 +14,7 @@ from PIL import Image, ImageDraw, ImageFont
 IMG_SIZE = (1920, 1080)
 IMG_MSG = "This is sample text"
 IMG_FONT = ImageFont.truetype('arial.ttf', 60)
+REDDIT = securedata.getItem("reddit")
 
 
 def create_text_image(size, bg_color, message, font, font_color):
@@ -23,22 +24,12 @@ def create_text_image(size, bg_color, message, font, font_color):
     text_image = Image.new('RGB', size, bg_color)
     draw = ImageDraw.Draw(text_image)
 
-    # append newlines after every 7 words
-    # new_sentence_array = []
-    # for count, word in enumerate(message.split(" ")):
-    #     new_sentence_array.append(word)
-    #     if count % 7 == 0:
-    #         new_sentence_array.append("\n")
-    # new_sentence = ' '.join(new_sentence_array).replace("\n ", "\n")
-
     margin = 400
     offset = 500
     for line in textwrap.wrap(message, width=40, break_long_words=False):
         draw.text((margin, offset), line, font=font, fill=font_color)
         offset += font.getsize(line)[1]
 
-    # draw.multiline_text(((W-w)/2, (H-h)/2), message,
-    #                     font=font, fill=font_color, align="center")
     return text_image
 
 
@@ -94,73 +85,83 @@ def resize_canvas(old_image_path="314.jpg", new_image_path="save.jpg",
     new_image.save(new_image_path)
 
 
-REDDIT = securedata.getItem("reddit")
+def create_video():
+    """
+    Creates a video from downloaded Reddit files, then adds audio
+    """
+    auth = requests.auth.HTTPBasicAuth(
+        REDDIT['personal_script'], REDDIT['secret'])
+    data = {'grant_type': 'password',
+            'username': REDDIT['username'],
+            'password': REDDIT['password']}
 
-auth = requests.auth.HTTPBasicAuth(
-    REDDIT['personal_script'], REDDIT['secret'])
-data = {'grant_type': 'password',
-        'username': REDDIT['username'],
-        'password': REDDIT['password']}
+    headers = {'User-Agent': 'MyBot/0.0.1'}
 
-headers = {'User-Agent': 'MyBot/0.0.1'}
+    # send our request for an OAuth token
+    res = requests.post('https://www.reddit.com/api/v1/access_token',
+                        auth=auth, data=data, headers=headers, timeout=30)
 
-# send our request for an OAuth token
-res = requests.post('https://www.reddit.com/api/v1/access_token',
-                    auth=auth, data=data, headers=headers, timeout=30)
+    print("res", res)
+    token = res.json()['access_token']
 
-print("res", res)
-TOKEN = res.json()['access_token']
+    headers = {**headers, **{'Authorization': f"bearer {token}"}}
 
-headers = {**headers, **{'Authorization': f"bearer {TOKEN}"}}
+    res = requests.get("https://oauth.reddit.com/r/oldschoolcool/hot",
+                       headers=headers, timeout=30)
 
-res = requests.get("https://oauth.reddit.com/r/oldschoolcool/hot",
-                   headers=headers, timeout=30)
+    img_count = 0
 
-IMG_COUNT = 0
+    # create title image for beginning of video
+    image = create_text_image((1920, 1080), 'yellow',
+                              "Old School Cool!", IMG_FONT, 'black')
+    image.save("./output/0.jpg", "JPEG")
 
-# create title image for beginning of video
-image = create_text_image((1920, 1080), 'yellow',
-                          "Old School Cool!", IMG_FONT, 'black')
-image.save("./output/0.jpg", "JPEG")
+    # create title image for end of video
+    image = create_text_image((1920, 1080), 'yellow',
+                              "Thanks for watching. Please like and subscribe!", IMG_FONT, 'black')
+    image.save("./output/11.jpg", "JPEG")
 
-# create title image for end of video
-image = create_text_image((1920, 1080), 'yellow',
-                          "Thanks for watching. Please like and subscribe!", IMG_FONT, 'black')
-image.save("./output/11.jpg", "JPEG")
+    for post in res.json()['data']['children']:
+        if img_count > 8:
+            break
 
-for post in res.json()['data']['children']:
-    if IMG_COUNT > 8:
-        break
+        if str(post['data']['url']).endswith('jpg'):
+            img_count += 1
 
-    if str(post['data']['url']).endswith('jpg'):
-        IMG_COUNT += 1
+            # create title card image
+            image = create_text_image((1920, 1080), 'black',
+                                      post['data']['title'], IMG_FONT, 'yellow')
+            image.save(f"./output/{img_count}.jpg", "JPEG")
+            img_count += 1
 
-        # create title card image
-        msg_text = post['data']['title']
+            # save Reddit image
+            print(f"Downloading {img_count}")
+            print(post['data']['url'])
 
-        image = create_text_image((1920, 1080), 'black',
-                                  post['data']['title'] or 'Check this out:', IMG_FONT, 'yellow')
-        image.save(f"./output/{IMG_COUNT}.jpg", "JPEG")
-        IMG_COUNT += 1
+            img = requests.get(post['data']['url'], timeout=30).content
 
-        # save Reddit image
-        print(f"Downloading {IMG_COUNT}")
-        print(post['data']['url'])
+            with open(f"./output/{img_count}.jpg", 'wb') as handler:
+                handler.write(img)
 
-        img = requests.get(post['data']['url'], timeout=30).content
+            resize_canvas(f"./output/{img_count}.jpg",
+                          f"./output/{img_count}.jpg", 1920, 1080)
 
-        with open(f"./output/{IMG_COUNT}.jpg", 'wb') as handler:
-            handler.write(img)
+    # remove old video
+    os.system("rm output.mp4")
 
-        resize_canvas(f"./output/{IMG_COUNT}.jpg",
-                      f"./output/{IMG_COUNT}.jpg", 1920, 1080)
+    # create video
+    os.system(
+        "ffmpeg -f image2 -r 1/5 -i ./output/%01d.jpg -vcodec mpeg4 -y ./output/noaudio.mp4")
 
-# remove old video
-os.system("rm output.mp4")
+    # add audio
+    os.system("""ffmpeg -i ./output/noaudio.mp4 -i ./assets/beautiful_life.mp3 -map 0:v -map 1:a -c:v copy -shortest output.mp4""")
 
-# create video
-os.system(
-    "ffmpeg -f image2 -r 1/5 -i ./output/%01d.jpg -vcodec mpeg4 -y ./output/noaudio.mp4")
 
-# add audio
-os.system("""ffmpeg -i ./output/noaudio.mp4 -i ./assets/beautiful_life.mp3 -map 0:v -map 1:a -c:v copy -shortest output.mp4""")
+def main():
+    """
+    The main entrypoint
+    """
+    create_video()
+
+
+main()
