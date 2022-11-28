@@ -15,7 +15,7 @@ import sys
 import time
 import requests
 import httplib2
-from securedata import securedata
+from securedata import securedata, mail
 from PIL import Image, ImageDraw, ImageFont
 from apiclient.discovery import build
 from apiclient.errors import HttpError
@@ -27,9 +27,8 @@ from oauth2client.tools import argparser, run_flow
 
 IMG_SIZE = (1920, 1080)
 IMG_MSG = "This is sample text"
-IMG_FONT = ImageFont.truetype('arial.ttf', 60)
+IMG_FONT = ImageFont.truetype("freefont/FreeMono.ttf", 60)
 REDDIT = securedata.getItem("reddit")
-VIDEO_TITLE = "Old School Cool"
 
 
 def create_text_image(size, bg_color, message, font, font_color):
@@ -105,8 +104,6 @@ def create_video():
     Creates a video from downloaded Reddit files, then adds audio
     """
 
-    global VIDEO_TITLE
-
     auth = requests.auth.HTTPBasicAuth(
         REDDIT['personal_script'], REDDIT['secret'])
     data = {'grant_type': 'password',
@@ -114,6 +111,8 @@ def create_video():
             'password': REDDIT['password']}
 
     headers = {'User-Agent': 'MyBot/0.0.1'}
+
+    os.system("mkdir -p output")
 
     # send our request for an OAuth token
     res = requests.post('https://www.reddit.com/api/v1/access_token',
@@ -146,7 +145,7 @@ def create_video():
         if str(post['data']['url']).endswith('jpg'):
             img_count += 1
 
-            VIDEO_TITLE = post['data']['title']
+            video_title = post['data']['title']
 
             # create title card image
             image = create_text_image((1920, 1080), 'black',
@@ -175,6 +174,8 @@ def create_video():
 
     # add audio
     os.system("""ffmpeg -i ./output/noaudio.mp4 -i ./assets/beautiful_life.mp3 -map 0:v -map 1:a -c:v copy -shortest output.mp4""")
+
+    return video_title
 
 
 # Explicitly tell the underlying HTTP transport library not to retry, since
@@ -314,6 +315,8 @@ def resumable_upload(insert_request):
                     print(
                         f"Video id '{response['id']}' was successfully uploaded.")
                 else:
+                    mail.send(
+                        "Video Likely Uploaded", f"Your video is <a href='https://www.youtube.com/channel/UC2k4-eRjuKbpX2WGjFWa-2A'>probably now live</a>.<br><br>Fix this uncertainty by checking {response}.")
                     sys.exit(
                         f"The upload failed with an unexpected response: {response}")
         except HttpError as http_error:
@@ -344,11 +347,11 @@ def main():
     # securedata.writeFile("client-secrets.json", ".",
     #                      str(securedata.getItem("reddit", "google-oath")))
 
-    create_video()
+    video_title = create_video() or "Old School Cool"
 
     argparser.add_argument("--file", default="output.mp4",
                            help="Video file to upload")
-    argparser.add_argument("--title", help="Video title", default=VIDEO_TITLE)
+    argparser.add_argument("--title", help="Video title", default=video_title)
     argparser.add_argument("--description", help="Video description",
                            default="I found these cool pictures on Reddit and wanted to share them with you all! Make sure to like and subscribe for the latest updates.")
     argparser.add_argument("--category", default="22",
