@@ -349,6 +349,9 @@ def main():
 
     video_title = create_video() or "Old School Cool"
 
+    if len(video_title) > 80:
+        video_title = "Old School Cool, Daily Upload"
+
     argparser.add_argument("--file", default="output.mp4",
                            help="Video file to upload")
     argparser.add_argument("--title", help="Video title", default=video_title)
@@ -369,8 +372,12 @@ def main():
     youtube = get_authenticated_service(args)
 
     try:
+        print(f"\n\n\nUploading {video_title}\n\n\n")
         initialize_upload(youtube, args)
     except HttpError as error:
+        if error.resp.status == 400:
+            mail.send("Cannot Upload Video", str(error.content))
+
         print(f"An HTTP error {error.resp.status} occurred:\n{error.content}")
 
 
