@@ -249,6 +249,7 @@ def get_authenticated_service(args):
     credentials = storage.get()
 
     if credentials is None or credentials.invalid:
+        mail.send("Re-authorize YouTube", "Hi Tyler,<br>Connect to your cloud server to re-authorize YouTube.")
         credentials = run_flow(flow, storage, args)
 
     return build(YOUTUBE_API_SERVICE_NAME, YOUTUBE_API_VERSION,
