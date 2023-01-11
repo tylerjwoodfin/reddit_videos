@@ -166,14 +166,20 @@ def create_video():
                           f"./output/{img_count}.jpg", 1920, 1080)
 
     # remove old video
-    os.system("rm output.mp4")
+    os.system("rm -f output.mp4")
 
     # create video
+    securedata.log("Creating Video")
     os.system(
         "ffmpeg -f image2 -r 1/5 -i ./output/%01d.jpg -vcodec mpeg4 -y ./output/noaudio.mp4")
 
     # add audio
-    os.system("""ffmpeg -i ./output/noaudio.mp4 -i ./assets/beautiful_life.mp3 -map 0:v -map 1:a -c:v copy -shortest output.mp4""")
+    path_reddit_videos = securedata.getItem("path", "reddit_videos") or '.'
+    path_noaudio = f"{path_reddit_videos}/output/noaudio.mp4"
+    path_beautiful_life = f"{path_reddit_videos}/assets/beautiful_life.mp3"
+    cmd_video_params = "-map 0:v -map 1:a -c:v copy -shortest output.mp4"
+    cmd_video = f"""ffmpeg -i {path_noaudio} -i {path_beautiful_life} {cmd_video_params}"""
+    os.system(cmd_video)
 
     return video_title
 
@@ -241,17 +247,26 @@ def get_authenticated_service(args):
     Authorize client
     """
 
-    flow = flow_from_clientsecrets("client-secrets.json",
+    path_reddit_videos = securedata.getItem('path', 'reddit_videos')
+    if path_reddit_videos:
+        path_reddit_videos_f = f"{path_reddit_videos}/"
+    else:
+        path_reddit_videos_f = ""
+
+    flow = flow_from_clientsecrets(f"{path_reddit_videos_f}client-secrets.json",
                                    scope=YOUTUBE_UPLOAD_SCOPE,
                                    message=MISSING_CLIENT_SECRETS_MESSAGE)
 
     storage = Storage(f"{sys.argv[0]}-oauth2.json")
     credentials = storage.get()
 
+    securedata.log("Authorizing Video Upload")
     if credentials is None or credentials.invalid:
+        securedata.log("Could Not Authorize; sending email", level="error")
         mail.send("Re-authorize YouTube", "Hi Tyler,<br>Connect to your cloud server to re-authorize YouTube.")
         credentials = run_flow(flow, storage, args)
 
+    securedata.log("Returning from authorization flow")
     return build(YOUTUBE_API_SERVICE_NAME, YOUTUBE_API_VERSION,
                  http=credentials.authorize(httplib2.Http()))
 
@@ -312,14 +327,9 @@ def resumable_upload(insert_request):
             print("Uploading file...")
             response = insert_request.next_chunk()
             if response is not None:
-                if 'id' in response:
-                    print(
-                        f"Video id '{response['id']}' was successfully uploaded.")
-                else:
+                if 'snippet' in response[1]:
                     mail.send(
-                        "Video Likely Uploaded", f"Your video is <a href='https://www.youtube.com/channel/UC2k4-eRjuKbpX2WGjFWa-2A'>probably now live</a>.<br><br>Fix this uncertainty by checking {response}.")
-                    sys.exit(
-                        f"The upload failed with an unexpected response: {response}")
+                        "Video Uploaded", "Your video is <a href='https://www.youtube.com/channel/UC2k4-eRjuKbpX2WGjFWa-2A'> now live</a>.")
         except HttpError as http_error:
             if http_error.resp.status in RETRIABLE_STATUS_CODES:
                 error = f"A retriable HTTP error {http_error.resp.status} occurred:\n{http_error.content}" % (
@@ -345,9 +355,7 @@ def main():
     """
     The main entrypoint
     """
-    # securedata.writeFile("client-secrets.json", ".",
-    #                      str(securedata.getItem("reddit", "google-oath")))
-
+    
     video_title = create_video() or "Old School Cool"
 
     if len(video_title) > 80:
@@ -373,7 +381,7 @@ def main():
     youtube = get_authenticated_service(args)
 
     try:
-        print(f"\n\n\nUploading {video_title}\n\n\n")
+        securedata.log(f"Uploading video as '{video_title}'")
         initialize_upload(youtube, args)
     except HttpError as error:
         if error.resp.status == 400:
