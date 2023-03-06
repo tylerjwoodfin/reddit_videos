@@ -15,7 +15,7 @@ import sys
 import time
 import requests
 import httplib2
-from securedata import securedata, mail
+from cabinet import cabinet, mail
 from PIL import Image, ImageDraw, ImageFont
 from apiclient.discovery import build
 from apiclient.errors import HttpError
@@ -28,7 +28,7 @@ from oauth2client.tools import argparser, run_flow
 IMG_SIZE = (1920, 1080)
 IMG_MSG = "This is sample text"
 IMG_FONT = ImageFont.truetype("freefont/FreeMono.ttf", 60)
-REDDIT = securedata.getItem("reddit")
+REDDIT = cabinet.get("reddit")
 
 
 def create_text_image(size, bg_color, message, font, font_color):
@@ -169,12 +169,12 @@ def create_video():
     os.system("rm -f output.mp4")
 
     # create video
-    securedata.log("Creating Video")
+    cabinet.log("Creating Video")
     os.system(
         "ffmpeg -f image2 -r 1/5 -i ./output/%01d.jpg -vcodec mpeg4 -y ./output/noaudio.mp4")
 
     # add audio
-    path_reddit_videos = securedata.getItem("path", "reddit_videos") or '.'
+    path_reddit_videos = cabinet.get("path", "reddit_videos") or '.'
     path_noaudio = f"{path_reddit_videos}/output/noaudio.mp4"
     path_beautiful_life = f"{path_reddit_videos}/assets/beautiful_life.mp3"
     cmd_video_params = "-map 0:v -map 1:a -c:v copy -shortest output.mp4"
@@ -201,7 +201,7 @@ RETRIABLE_EXCEPTIONS = (httplib2.HttpLib2Error, IOError, httplib.NotConnected,
 # codes is raised.
 RETRIABLE_STATUS_CODES = [500, 502, 503, 504]
 
-# The CLIENT_SECRETS variable specifies the data in securedata that contains
+# The CLIENT_SECRETS variable specifies the data in cabinet that contains
 # the OAuth 2.0 information for this application, including its client_id and
 # client_secret. You can acquire an OAuth 2.0 client ID and client secret from
 # the Google API Console at
@@ -223,7 +223,7 @@ YOUTUBE_API_VERSION = "v3"
 MISSING_CLIENT_SECRETS_MESSAGE = """
 WARNING: Please configure OAuth 2.0
 
-To make this sample run you will need to populate the securedata's settings.json -> reddit -> google-oath as follows:
+To make this sample run you will need to populate the cabinet's settings.json -> reddit -> google-oath as follows:
 
 "google-oath": {
             "web": {
@@ -247,7 +247,7 @@ def get_authenticated_service(args):
     Authorize client
     """
 
-    path_reddit_videos = securedata.getItem('path', 'reddit_videos')
+    path_reddit_videos = cabinet.get('path', 'reddit_videos')
     if path_reddit_videos:
         path_reddit_videos_f = f"{path_reddit_videos}/"
     else:
@@ -260,13 +260,13 @@ def get_authenticated_service(args):
     storage = Storage(f"{sys.argv[0]}-oauth2.json")
     credentials = storage.get()
 
-    securedata.log("Authorizing Video Upload")
+    cabinet.log("Authorizing Video Upload")
     if credentials is None or credentials.invalid:
-        securedata.log("Could Not Authorize; sending email", level="error")
+        cabinet.log("Could Not Authorize; sending email", level="error")
         mail.send("Re-authorize YouTube", "Hi Tyler,<br>Connect to your cloud server to re-authorize YouTube.")
         credentials = run_flow(flow, storage, args)
 
-    securedata.log("Returning from authorization flow")
+    cabinet.log("Returning from authorization flow")
     return build(YOUTUBE_API_SERVICE_NAME, YOUTUBE_API_VERSION,
                  http=credentials.authorize(httplib2.Http()))
 
@@ -381,7 +381,7 @@ def main():
     youtube = get_authenticated_service(args)
 
     try:
-        securedata.log(f"Uploading video as '{video_title}'")
+        cabinet.log(f"Uploading video as '{video_title}'")
         initialize_upload(youtube, args)
     except HttpError as error:
         if error.resp.status == 400:
