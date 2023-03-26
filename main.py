@@ -15,20 +15,21 @@ import sys
 import time
 import requests
 import httplib2
-from cabinet import cabinet, mail
-from PIL import Image, ImageDraw, ImageFont
-from apiclient.discovery import build
-from apiclient.errors import HttpError
-from apiclient.http import MediaFileUpload
+from oauth2client.tools import argparser, run_flow
 from oauth2client.client import flow_from_clientsecrets
 from oauth2client.file import Storage
-from oauth2client.tools import argparser, run_flow
+from PIL import Image, ImageDraw, ImageFont
+from apiclient.http import MediaFileUpload
+from apiclient.discovery import build
+from apiclient.errors import HttpError
+from cabinet import Cabinet, mail
 
+cab = Cabinet()
 
 IMG_SIZE = (1920, 1080)
 IMG_MSG = "This is sample text"
 IMG_FONT = ImageFont.truetype("freefont/FreeMono.ttf", 60)
-REDDIT = cabinet.get("reddit")
+REDDIT = cab.get("reddit")
 
 
 def create_text_image(size, bg_color, message, font, font_color):
@@ -169,12 +170,12 @@ def create_video():
     os.system("rm -f output.mp4")
 
     # create video
-    cabinet.log("Creating Video")
+    cab.log("Creating Video")
     os.system(
         "ffmpeg -f image2 -r 1/5 -i ./output/%01d.jpg -vcodec mpeg4 -y ./output/noaudio.mp4")
 
     # add audio
-    path_reddit_videos = cabinet.get("path", "reddit_videos") or '.'
+    path_reddit_videos = cab.get("path", "reddit_videos") or '.'
     path_noaudio = f"{path_reddit_videos}/output/noaudio.mp4"
     path_beautiful_life = f"{path_reddit_videos}/assets/beautiful_life.mp3"
     cmd_video_params = "-map 0:v -map 1:a -c:v copy -shortest output.mp4"
@@ -247,7 +248,7 @@ def get_authenticated_service(args):
     Authorize client
     """
 
-    path_reddit_videos = cabinet.get('path', 'reddit_videos')
+    path_reddit_videos = cab.get('path', 'reddit_videos')
     if path_reddit_videos:
         path_reddit_videos_f = f"{path_reddit_videos}/"
     else:
@@ -260,13 +261,13 @@ def get_authenticated_service(args):
     storage = Storage(f"{sys.argv[0]}-oauth2.json")
     credentials = storage.get()
 
-    cabinet.log("Authorizing Video Upload")
+    cab.log("Authorizing Video Upload")
     if credentials is None or credentials.invalid:
-        cabinet.log("Could Not Authorize; sending email", level="error")
+        cab.log("Could Not Authorize; sending email", level="error")
         mail.send("Re-authorize YouTube", "Hi Tyler,<br>Connect to your cloud server to re-authorize YouTube.")
         credentials = run_flow(flow, storage, args)
 
-    cabinet.log("Returning from authorization flow")
+    cab.log("Returning from authorization flow")
     return build(YOUTUBE_API_SERVICE_NAME, YOUTUBE_API_VERSION,
                  http=credentials.authorize(httplib2.Http()))
 
@@ -381,7 +382,7 @@ def main():
     youtube = get_authenticated_service(args)
 
     try:
-        cabinet.log(f"Uploading video as '{video_title}'")
+        cab.log(f"Uploading video as '{video_title}'")
         initialize_upload(youtube, args)
     except HttpError as error:
         if error.resp.status == 400:
