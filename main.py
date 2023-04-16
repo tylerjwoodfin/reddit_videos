@@ -22,9 +22,10 @@ from PIL import Image, ImageDraw, ImageFont
 from apiclient.http import MediaFileUpload
 from apiclient.discovery import build
 from apiclient.errors import HttpError
-from cabinet import Cabinet, mail
+from cabinet import Cabinet, Mail
 
 cab = Cabinet()
+mail = Mail()
 
 IMG_SIZE = (1920, 1080)
 IMG_MSG = "This is sample text"
